@@ -7,7 +7,7 @@ from sympy.integrals.manualintegrate import (
     _manualintegrate, integral_steps, evaluates,
     ConstantRule, ConstantTimesRule, PowerRule, AddRule, URule,
     PartsRule, CyclicPartsRule, TrigRule, ExpRule, ReciprocalRule, ArctanRule,
-    AlternativeRule, DontKnowRule, RewriteRule
+    AlternativeRule, DontKnowRule, RewriteRule, PiecewiseRule
 )
 
 # Need this to break loops
@@ -81,6 +81,8 @@ class IntegralPrinter(object):
             self.print_DontKnow(rule)
         elif isinstance(rule, RewriteRule):
             self.print_Rewrite(rule)
+        elif isinstance(rule, PiecewiseRule):
+            self.print_Piecewise(rule)
         else:
             self.append(repr(rule))
 
@@ -145,7 +147,21 @@ class IntegralPrinter(object):
                 sympy.Integral(integrand, u)))
 
             with self.new_level():
-                self.print_rule(replace_u_var(rule.substep, rule.symbol.name, u))
+
+                if isinstance(rule.substep, PiecewiseRule):
+                    substep = None
+                    cond = False
+                    for s, c in rule.substep.subfunctions:
+                        if c:
+                            if cond and c:
+                                raise ValueError("Multiple conditions in piecewise rule is not handled yet.")
+                            substep = s
+                            cond = True
+                    
+                    self.print_rule(replace_u_var(substep, rule.symbol.name, u))
+
+                else:
+                    self.print_rule(replace_u_var(rule.substep, rule.symbol.name, u))
 
             self.append("Now substitute {} back in:".format(
                 self.format_math(u)))
@@ -282,6 +298,18 @@ class IntegralPrinter(object):
             self.append("But the integral is")
             self.append(self.format_math_display(sympy.integrate(rule.context, rule.symbol)))
 
+    def print_Piecewise(self, rule):
+
+        substep = None
+        cond = False
+        for s, c in rule.subfunctions:
+            if c:
+                if cond and c:
+                    raise ValueError("Multiple conditions in piecewise rule is not handled yet.")
+                substep = s
+                cond = True
+        
+        self.print_rule(substep)
 
 class HTMLPrinter(IntegralPrinter, stepprinter.HTMLPrinter):
     def __init__(self, rule):
